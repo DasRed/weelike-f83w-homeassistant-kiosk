@@ -23,14 +23,15 @@ cd weelike-f83w-homeassistant-kiosk
 ./flash.sh
 ```
 
-Das System-Image (~800 MB gepackt, 1,6 GB entpackt) liegt nicht im Repository, sondern im
-[GitHub-Release](https://github.com/DasRed/weelike-f83w-homeassistant-kiosk/releases).
-`flash.sh` lädt es beim ersten Start selbst herunter, entpackt es nach `images/` und
-prüft die Prüfsumme (`images/SHA256SUMS`).
+Das System-Image liegt als geteiltes Zip-Archiv in `images/`
+(`lineage-20-a64_bvS-f83w-v7.img.zip` + `.z01` … `.z08`, je unter 100 MB, zusammen ~800 MB).
+`flash.sh` setzt es beim ersten Start mit `tools/extract_split_zip.py` zum 1,6 GB großen
+Image zusammen und prüft die Prüfsumme (`images/SHA256SUMS`). Fehlen Teile – etwa bei
+einem Download ohne `git clone` –, lädt das Skript sie aus dem Repository nach.
 
 ## Voraussetzungen
 
-- Mac (Apple Silicon oder Intel) – fehlende Werkzeuge installiert das Skript
+- Mac (Apple Silicon oder Intel) mit `python3` (Xcode Command Line Tools) – fehlende Werkzeuge installiert das Skript
   selbst über Homebrew (`android-platform-tools`). Nur falls `fastboot` den
   Allwinner-Bootloader nicht erkennt, kommen zusätzlich `libusb` und Python/`pyusb`
   für den Notfallweg dazu.
@@ -103,8 +104,9 @@ template:
 
 ```
 flash.sh                      Hauptskript
-images/                       leeres vbmeta, SHA256SUMS (System-Image kommt aus dem Release)
+images/                       System-Image als geteiltes Zip, leeres vbmeta, SHA256SUMS
 tools/fastboot_usb.py         Fastboot über libusb (für den Allwinner-Bootloader am Mac)
+tools/extract_split_zip.py    entpackt das geteilte Image-Zip (nur Python-Standardbibliothek)
 src/                          alle Änderungen gegenüber dem Original-GSI
   system/bin/f83w-boot.sh       Standardeinstellungen, Rechte, Startbildschirm
   system/bin/f83w-watchdog.sh   Wächter

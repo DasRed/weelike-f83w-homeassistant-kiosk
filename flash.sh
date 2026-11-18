@@ -17,7 +17,9 @@ cd "$(dirname "$0")" || exit 1
 ROOT=$(pwd)
 IMAGE_VERSION="v7"
 IMAGE="images/lineage-20-a64_bvS-f83w-$IMAGE_VERSION.img"
-IMAGE_URL="https://github.com/DasRed/weelike-f83w-homeassistant-kiosk/releases/download/$IMAGE_VERSION/lineage-20-a64_bvS-f83w-$IMAGE_VERSION.img.gz"
+IMAGE_ZIP="$IMAGE.zip"            # geteiltes Zip: .zip + .z01 ... .z08 (je < 100 MB fuer GitHub)
+IMAGE_ZIP_PARTS=8
+REPO_RAW="https://github.com/DasRed/weelike-f83w-homeassistant-kiosk/raw/main"
 VBMETA="images/vbmeta_disabled.img"
 PKG="io.homeassistant.companion.android.minimal"
 HA_DB="/data/data/$PKG/databases/HomeAssistantDB"
@@ -75,6 +77,8 @@ ha_ssid_set()    { [ "$(hadb "select count(*) from servers where internal_ssids 
 prerequisites() {
   step "1/7  Voraussetzungen auf dem Mac"
   [ "$(uname -s)" = "Darwin" ] || fail "Dieses Skript ist fuer macOS gedacht."
+  command -v python3 >/dev/null 2>&1 && python3 -c 'import zlib' >/dev/null 2>&1 \
+    || fail "python3 fehlt. Bitte 'xcode-select --install' ausfuehren und das Skript neu starten."
 
   if ! command -v brew >/dev/null 2>&1; then
     for p in /opt/homebrew/bin/brew /usr/local/bin/brew; do [ -x "$p" ] && eval "$("$p" shellenv)"; done
@@ -95,13 +99,19 @@ prerequisites() {
 
   [ -f "$VBMETA" ] || fail "images/vbmeta_disabled.img fehlt."
   if [ ! -f "$IMAGE" ]; then
-    if [ ! -f "$IMAGE.gz" ]; then
-      info "System-Image fehlt – lade $IMAGE_VERSION aus dem GitHub-Release (ca. 800 MB) ..."
-      curl -fL --progress-bar -o "$IMAGE.gz.part" "$IMAGE_URL" && mv "$IMAGE.gz.part" "$IMAGE.gz" \
-        || fail "Download fehlgeschlagen: $IMAGE_URL"
+    local i part missing=""
+    for i in $(seq 1 "$IMAGE_ZIP_PARTS"); do part=$(printf "%s.z%02d" "$IMAGE" "$i"); [ -f "$part" ] || missing="$missing $part"; done
+    [ -f "$IMAGE_ZIP" ] || missing="$missing $IMAGE_ZIP"
+    if [ -n "$missing" ]; then
+      info "Image-Teile fehlen – lade sie aus dem Repository (ca. 800 MB) ..."
+      for part in $missing; do
+        info "  $(basename "$part")"
+        curl -fL --progress-bar -o "$part.part" "$REPO_RAW/$part" && mv "$part.part" "$part" \
+          || fail "Download fehlgeschlagen: $REPO_RAW/$part"
+      done
     fi
-    info "Entpacke $IMAGE.gz ..."
-    gunzip -k "$IMAGE.gz" || fail "Entpacken fehlgeschlagen."
+    info "Setze das System-Image aus den Zip-Teilen zusammen ..."
+    python3 tools/extract_split_zip.py "$IMAGE_ZIP" images >/dev/null || fail "Entpacken fehlgeschlagen."
   fi
   info "Pruefe Pruefsummen der Images (dauert einen Moment) ..."
   (cd images && grep -E "  (lineage-20-a64_bvS-f83w-$IMAGE_VERSION.img|vbmeta_disabled.img)$" SHA256SUMS | shasum -a 256 -c - >/dev/null 2>&1) \
@@ -156,7 +166,6 @@ connect_device() {
 usb_fallback_ready() {
   brew list libusb >/dev/null 2>&1 || { info "Installiere libusb"; brew install libusb || return 1; }
   if [ ! -x "$VENV/bin/python" ] || ! "$VENV/bin/python" -c "import usb" >/dev/null 2>&1; then
-    command -v python3 >/dev/null 2>&1 || { info "Installiere Python"; brew install python || return 1; }
     info "Lege Python-Umgebung mit pyusb an ($VENV)"
     python3 -m venv "$VENV" && "$VENV/bin/pip" install -q --upgrade pip pyusb || return 1
   fi

@@ -1,5 +1,4 @@
 .venv/
 logs/
 images/lineage-*.img
-images/lineage-*.img.gz
 images/*.part
