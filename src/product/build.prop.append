@@ -1,0 +1,9 @@
+####################################
+# F83W (Weelikeit, Allwinner A133)
+# Panel liefert 800x1280 hochkant; Stock dreht per Allwinner-Prop ro.vendor.sf.rotation=90.
+# AOSP-Entsprechung, damit Querformat die Grundausrichtung ist:
+####################################
+ro.surface_flinger.primary_display_orientation=ORIENTATION_90
+# Navigationsleiste aus (Wand-Display ohne Zurueck/Home/Uebersicht)
+qemu.hw.mainkeys=1
+persist.sys.phh.mainkeys=1

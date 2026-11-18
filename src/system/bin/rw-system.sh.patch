@@ -1,0 +1,16 @@
+--- a/system/bin/rw-system.sh
++++ b/system/bin/rw-system.sh
+@@ -553,6 +553,13 @@
+ fi
+ 
+ mount -o bind /system/phh/empty /vendor/lib/libpdx_default_transport.so
++
++# F83W: Weelikeit-Hersteller-Apps ausblenden (Signature mismatch -> system_server-Bootloop)
++mount -o bind /system/etc/hide-vendor-app /vendor/app
++# F83W: Lagesensor-Achsen an Querformat (ORIENTATION_90) anpassen: msa ohne xy-Tausch, x/y gespiegelt
++mount -o bind /system/etc/f83w/gsensor.cfg /vendor/etc/gsensor.cfg
++# F83W: keine Navigationsleiste (Wand-Display); wird von WindowManager/DisplayPolicy gelesen
++setprop qemu.hw.mainkeys 1
+ mount -o bind /system/phh/empty /vendor/lib64/libpdx_default_transport.so
+ 
+ mount -o bind /system/phh/empty /vendor/overlay/SysuiDarkTheme/SysuiDarkTheme.apk || true

@@ -1,0 +1,10 @@
+# F83W Wand-Display
+service f83w_watchdog /system/bin/f83w-watchdog.sh
+    class late_start
+    user root
+    group root
+    disabled
+
+on property:sys.boot_completed=1
+    exec_background - root -- /system/bin/f83w-boot.sh
+    start f83w_watchdog
