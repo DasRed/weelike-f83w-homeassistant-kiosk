@@ -1,23 +1,23 @@
-# F83W → Home-Assistant-Wanddisplay
+# F83W → Home Assistant wall panel
 
-Baut ein **Weelikeit F83W** (8″, Allwinner A133, Android 13 Werksfirmware) zu einem
-schlanken Wanddisplay für Home Assistant um:
+Turns a **Weelikeit F83W** (8″, Allwinner A133, stock Android 13) into a slim
+wall panel for Home Assistant:
 
-- LineageOS 20 (Android 13) GSI `a64_bvS` von AndyYan, angepasst für das F83W
-- Querformat als Grundausrichtung, Lagesensor korrigiert
-- Hersteller-Apps ausgeblendet (sie lassen ein GSI sonst in einer Bootschleife hängen)
-- rund 30 überflüssige Apps entfernt, keine Animationen, kein Sperrbildschirm,
-  Display bleibt am Netzteil an
-- **Home-Assistant-App (minimal, ohne Google-Dienste) fest eingebaut** als
-  Startbildschirm, im Vollbild, mit allen Rechten
-- Wächter: hält die App im Vordergrund, trägt nach dem Anmelden Heim-WLAN und
-  dauerhafte Verbindung ein, startet die App täglich um 04:00 neu
+- LineageOS 20 (Android 13) GSI `a64_bvS` by AndyYan, adapted for the F83W
+- Landscape as the default orientation, accelerometer axes fixed
+- Vendor apps hidden (otherwise they keep a GSI in a boot loop)
+- About 30 unneeded apps removed, no animations, no lock screen,
+  screen stays on while powered
+- **Home Assistant app (minimal, without Google services) built in** as the
+  home app, full screen, with all permissions
+- Watchdog: keeps the app in the foreground, sets the home Wi-Fi and the
+  persistent connection after login, restarts the app every day at 04:00
 
-Getestet mit Werksfirmware `weelikeit_F83W_V01_20240111` (Vendor-Build `20231212`).
+Tested with stock firmware `weelikeit_F83W_V01_20240111` (vendor build `20231212`).
 
-Die Geschichte dahinter – Bootloader-Unlock, Bootschleife, Lagesensor, Kiosk – steht im
-Artikel [How I Turned Four Cheap Android Tablets into Rock-Solid Home Assistant Wall Panels](https://medium.com/@marco.starker/how-i-turned-four-cheap-android-tablets-into-rock-solid-home-assistant-wall-panels-6e24d7c8c7ba)
-auf Medium (Englisch).
+The story behind it – bootloader unlock, boot loop, accelerometer, kiosk – is told in the
+article [How I Turned Four Cheap Android Tablets into Rock-Solid Home Assistant Wall Panels](https://medium.com/@marco.starker/how-i-turned-four-cheap-android-tablets-into-rock-solid-home-assistant-wall-panels-6e24d7c8c7ba)
+on Medium.
 
 ## Download
 
@@ -27,139 +27,139 @@ cd weelike-f83w-homeassistant-kiosk
 ./flash.sh
 ```
 
-Das System-Image liegt nicht im Repository. GitHub Actions baut es aus dem Original-GSI
-und `src/` und legt es als [Release](https://github.com/DasRed/weelike-f83w-homeassistant-kiosk/releases)
-ab (`lineage-20-a64_bvS-f83w-<version>.img.xz`, ca. 650 MB, entpackt 1,6 GB). `flash.sh`
-lädt beim ersten Start die eingestellte Version (`IMAGE_VERSION`, aktuell `v8`), prüft die
-Prüfsummen und entpackt sie nach `images/`. Eine andere Version:
+The system image is not stored in the repository. GitHub Actions builds it from the
+original GSI and `src/` and publishes it as a [release](https://github.com/DasRed/weelike-f83w-homeassistant-kiosk/releases)
+(`lineage-20-a64_bvS-f83w-<version>.img.xz`, about 650 MB, 1.6 GB unpacked). On the first
+run, `flash.sh` downloads the configured version (`IMAGE_VERSION`, currently `v8`),
+verifies the checksums and unpacks it into `images/`. To use another version:
 `F83W_IMAGE_VERSION=v9 ./flash.sh`.
 
-## Voraussetzungen
+## Requirements
 
-- Mac (Apple Silicon oder Intel) mit `python3` (Xcode Command Line Tools) – fehlende Werkzeuge installiert das Skript
-  selbst über Homebrew (`android-platform-tools`, `xz`). Nur falls `fastboot` den
-  Allwinner-Bootloader nicht erkennt, kommen zusätzlich `libusb` und Python/`pyusb`
-  für den Notfallweg dazu.
-- **USB-Datenkabel** (reine Ladekabel – z. B. das Apple-Netzteilkabel – reichen nicht)
-- Tablet mit mindestens 40 % Akku oder am Netzteil
+- Mac (Apple Silicon or Intel) with `python3` (Xcode Command Line Tools) – the script
+  installs missing tools itself via Homebrew (`android-platform-tools`, `xz`). Only if
+  `fastboot` does not detect the Allwinner bootloader, `libusb` and Python/`pyusb` are
+  added for the fallback.
+- **USB data cable** (charge-only cables – e.g. the Apple power adapter cable – won't work)
+- Tablet with at least 40 % battery or connected to a charger
 
-## Ausführen
+## Running
 
-Das Skript führt Schritt für Schritt durch, wartet auf Eingaben am Tablet und prüft
-selbstständig, wann es weitergehen kann. Bereits erledigte Schritte erkennt es –
-nach einem Abbruch einfach neu starten.
+The script guides you step by step, waits for input on the tablet and checks by itself
+when it can continue. It detects steps that are already done – after an interruption,
+simply start it again.
 
-| Schritt | Was passiert | Deine Aufgabe |
+| Step | What happens | Your part |
 |---|---|---|
-| 1 | Werkzeuge prüfen/installieren, Image laden, Prüfsummen | ggf. Homebrew-Installation bestätigen |
-| 2 | Tablet erkennen und prüfen | Entwickleroptionen + USB-Debugging an, Abfrage bestätigen |
-| 3 | Bootloader entsperren (**löscht alle Daten**) | OEM-Entsperrung an, Bestätigen |
-| 4 | System flashen | – |
-| 5 | Erster Start | 3–5 Minuten warten |
-| 6 | Lineage-Einrichtungsassistent | Sprache, WLAN, Datum/Zeit |
-| 7 | Home Assistant | Server wählen, anmelden, Dashboard wählen |
+| 1 | Check/install tools, download image, verify checksums | confirm the Homebrew installation if asked |
+| 2 | Detect and check the tablet | turn on developer options + USB debugging, confirm the prompt |
+| 3 | Unlock the bootloader (**erases all data**) | turn on OEM unlocking, confirm |
+| 4 | Flash the system | – |
+| 5 | First boot | wait 3–5 minutes |
+| 6 | LineageOS setup wizard | language, Wi-Fi, date/time |
+| 7 | Home Assistant | choose server, log in, choose dashboard |
 
-Protokolle landen in `logs/`.
+Logs are written to `logs/`.
 
 ## Home Assistant
 
-Die App bringt keine Schalter mit, sondern Sensoren und Befehle. Helligkeit setzen:
+The app does not provide switches but sensors and commands. Set the brightness:
 
 ```yaml
-action: notify.mobile_app_<geraet>
+action: notify.mobile_app_<device>
 data:
   message: command_screen_brightness_level
   data:
     command: 120   # 0..255
 ```
 
-Als Regler über ein Template-`number` (in der App den Sensor *Bildschirmhelligkeit*
-aktivieren, damit der Regler den aktuellen Wert zeigt):
+As a slider via a template `number` (enable the *Screen brightness* sensor in the app
+so the slider shows the current value):
 
 ```yaml
 template:
   - number:
-      - name: "F83W Bildschirmhelligkeit"
-        unique_id: f83w_bildschirmhelligkeit
+      - name: "F83W screen brightness"
+        unique_id: f83w_screen_brightness
         min: 0
         max: 255
         step: 1
-        state: "{{ states('sensor.<geraet>_bildschirmhelligkeit') | int(0) }}"
+        state: "{{ states('sensor.<device>_screen_brightness') | int(0) }}"
         set_value:
-          - action: notify.mobile_app_<geraet>
+          - action: notify.mobile_app_<device>
             data:
               message: command_screen_brightness_level
               data:
                 command: "{{ value | int }}"
 ```
 
-## Fehlerbehebung
+## Troubleshooting
 
-- **Tablet startet nicht / hängt:** Tablet aus, **Lauter + Power** gedrückt halten,
-  bis das Recovery-Menü erscheint → `Enter fastboot` → `./flash.sh` neu starten.
-- **Bootloader vom Mac nicht erreichbar:** Das Skript versucht zuerst `fastboot`, dann
-  direkten USB-Zugriff über libusb (`tools/fastboot_usb.py`). Klappt beides nicht,
-  zeigt es den einmaligen Umweg über einen Windows-PC an.
-- **Android-Einstellungen:** Statusleiste vom oberen Rand herunterwischen → Zahnrad,
-  oder `adb shell am start -a android.settings.SETTINGS`. Nach 10 Minuten holt der
-  Wächter Home Assistant zurück.
-- **Logs vom Tablet:** `adb logcat -d -s f83w f83w-watchdog`
+- **Tablet doesn't boot / hangs:** turn the tablet off, hold **Volume Up + Power**
+  until the recovery menu appears → `Enter fastboot` → start `./flash.sh` again.
+- **Bootloader not reachable from the Mac:** the script first tries `fastboot`, then
+  direct USB access via libusb (`tools/fastboot_usb.py`). If both fail, it shows the
+  one-time workaround via a Windows PC.
+- **Android settings:** swipe down the status bar from the top edge → gear icon,
+  or `adb shell am start -a android.settings.SETTINGS`. After 10 minutes the
+  watchdog brings Home Assistant back.
+- **Logs from the tablet:** `adb logcat -d -s f83w f83w-watchdog`
 
-## Aufbau
+## Structure
 
 ```
-flash.sh                      Hauptskript
-images/                       leeres vbmeta, SHA256SUMS (System-Image wird hierher geladen)
-tools/fastboot_usb.py         Fastboot über libusb (für den Allwinner-Bootloader am Mac)
-tools/build_image.py          baut das System-Image (läuft in GitHub Actions)
-build/sources.json            Original-GSI und Home-Assistant-App mit Version und SHA-256
-.github/workflows/            Workflow „Image bauen“
-src/                          alle Änderungen gegenüber dem Original-GSI
-  system-files.txt              Zielpfad, Modus, Besitzer und SELinux-Label je Datei
-  system/bin/f83w-boot.sh       Standardeinstellungen, Rechte, Startbildschirm
-  system/bin/f83w-watchdog.sh   Wächter
-  system/bin/rw-system.sh.patch Bind-Mounts (Hersteller-Apps, Lagesensor) + Navigationsleiste
-  system/etc/init/f83w.rc       Startet Skripte/Wächter
-  system/etc/sysconfig/f83w.xml App von Akku-/Datensparen ausnehmen
-  system/etc/f83w/gsensor.cfg   korrigierte Sensorachsen (Eintrag "msa")
-  product/build.prop.append     Displayausrichtung, Navigationsleiste
-  removed-apps.txt              entfernte Apps
+flash.sh                      main script
+images/                       blank vbmeta, SHA256SUMS (the system image is downloaded here)
+tools/fastboot_usb.py         fastboot via libusb (for the Allwinner bootloader on the Mac)
+tools/build_image.py          builds the system image (runs in GitHub Actions)
+build/sources.json            original GSI and Home Assistant app with version and SHA-256
+.github/workflows/            "Build image" workflow
+src/                          all changes compared to the original GSI
+  system-files.txt              target path, mode, owner and SELinux label per file
+  system/bin/f83w-boot.sh       defaults, permissions, home app
+  system/bin/f83w-watchdog.sh   watchdog
+  system/bin/rw-system.sh.patch bind mounts (vendor apps, accelerometer) + navigation bar
+  system/etc/init/f83w.rc       starts the scripts/watchdog
+  system/etc/sysconfig/f83w.xml exempts the app from battery/data saver
+  system/etc/f83w/gsensor.cfg   corrected sensor axes (entry "msa")
+  product/build.prop.append     display orientation, navigation bar
+  removed-apps.txt              removed apps
 ```
 
-Zusätzlich im Image: Home-Assistant-App unter `/system/app/HomeAssistant`
-(mit entpackten `armeabi-v7a`-Bibliotheken), ext4-Deduplizierung (`shared_blocks`) entfernt.
+Also in the image: the Home Assistant app in `/system/app/HomeAssistant`
+(with extracted `armeabi-v7a` libraries), ext4 deduplication (`shared_blocks`) removed.
 
-## Image bauen
+## Building the image
 
-`tools/build_image.py` erzeugt das Image ohne root und ohne Loop-Mounts: GSI und App laden
-(Prüfsummen aus `build/sources.json`), ext4 vergrößern und `shared_blocks` auflösen, mit
-`debugfs` Apps entfernen, Dateien samt SELinux-Labels schreiben, `rw-system.sh` patchen,
-`build.prop` ergänzen, zum Schluss prüfen und verkleinern. Braucht Linux mit `e2fsprogs`,
-`patch` und `xz`:
+`tools/build_image.py` builds the image without root and without loop mounts: download
+GSI and app (checksums from `build/sources.json`), grow the ext4 image and resolve
+`shared_blocks`, use `debugfs` to remove apps, write files including SELinux labels,
+patch `rw-system.sh` and extend `build.prop`, then check and shrink the file system.
+Requires Linux with `e2fsprogs`, `patch` and `xz`:
 
 ```bash
-python3 tools/build_image.py --version v9 --xz   # Ergebnis in out/
+python3 tools/build_image.py --version v9 --xz   # output in out/
 ```
 
-Der Workflow **Image bauen** läuft automatisch:
+The **Build image** workflow runs automatically:
 
-- **Pull Request**, der `src/`, `build/` oder das Build-Skript ändert: baut das Image und
-  legt es 3 Tage als Artefakt ab
-- **Tag `v*` pushen** (z. B. `git tag v9 && git push origin v9`): baut das Image und
-  veröffentlicht es als Release; danach `IMAGE_VERSION` in `flash.sh` hochsetzen
-- **manuell** (Actions → Image bauen → Run workflow): mit oder ohne Release
+- **Pull request** that changes `src/`, `build/` or the build script: builds the image and
+  keeps it as an artifact for 3 days
+- **Push a `v*` tag** (e.g. `git tag v9 && git push origin v9`): builds the image and
+  publishes it as a release; then bump `IMAGE_VERSION` in `flash.sh`
+- **Manually** (Actions → Build image → Run workflow): with or without a release
 
-Neue Home-Assistant-Version: `version`, `url` und `sha256` in `build/sources.json` anpassen.
+New Home Assistant version: update `version`, `url` and `sha256` in `build/sources.json`.
 
 ## Credits
 
-- [LineageOS](https://lineageos.org) – Android-Basis
-- [AndyYan](https://sourceforge.net/projects/andyyan-gsi/) – LineageOS-20-GSI `a64_bvS`, auf dem das Image aufbaut
-- [TrebleDroid / phhusson](https://github.com/TrebleDroid) – GSI-Unterbau (`rw-system.sh`, phh-superuser)
-- [Home Assistant Companion for Android](https://github.com/home-assistant/android) – App (Apache-2.0), unverändert eingebaut
+- [LineageOS](https://lineageos.org) – Android base
+- [AndyYan](https://sourceforge.net/projects/andyyan-gsi/) – LineageOS 20 GSI `a64_bvS` the image is based on
+- [TrebleDroid / phhusson](https://github.com/TrebleDroid) – GSI foundation (`rw-system.sh`, phh superuser)
+- [Home Assistant Companion for Android](https://github.com/home-assistant/android) – app (Apache-2.0), included unmodified
 
-## Haftung
+## Disclaimer
 
-Auf eigenes Risiko. Das Entsperren des Bootloaders löscht alle Daten und kann die
-Garantie kosten. Eine Sicherung der Werksfirmware gibt es nicht – das Tablet lässt sich
-danach nicht ohne Weiteres auf den Auslieferungszustand zurücksetzen.
+Use at your own risk. Unlocking the bootloader erases all data and may void the
+warranty. There is no backup of the stock firmware – the tablet cannot easily be
+restored to its factory state afterwards.

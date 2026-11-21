@@ -1,11 +1,11 @@
 #!/system/bin/sh
-# F83W Wand-Display: haelt Home Assistant im Vordergrund und startet die App
-# naechtlich einmal neu (gegen haengende/weisse WebView).
+# F83W wall panel: keeps Home Assistant in the foreground and restarts the app
+# once every night (against a stuck/white WebView).
 PKG=io.homeassistant.companion.android.minimal
 ACT=$PKG/io.homeassistant.companion.android.launch.LaunchActivity
-INTERVAL=30          # Sekunden zwischen Pruefungen
-GRACE=600            # so lange darf eine andere App vorne sein (z. B. Einstellungen)
-RESTART_AT=400       # naechtlicher App-Neustart (HMM ohne fuehrende Null, 400 = 04:00)
+INTERVAL=30          # seconds between checks
+GRACE=600            # how long another app may stay in front (e.g. settings)
+RESTART_AT=400       # nightly app restart (HMM without leading zero, 400 = 04:00)
 DB=/data/data/$PKG/databases/HomeAssistantDB
 log() { /system/bin/log -t f83w-watchdog "$*"; }
 
@@ -13,9 +13,9 @@ current_ssid() {
   cmd wifi status 2>/dev/null | grep -m1 -o 'SSID: "[^"]*"' | sed 's/^SSID: "//; s/"$//'
 }
 
-# Nach dem Anmelden einmalig je Server:
-#  - dauerhafte Verbindung = ALWAYS (ohne Google-Dienste noetig fuer Befehle aus HA)
-#  - Heim-WLAN = aktuell verbundenes WLAN, falls noch keins eingetragen ist
+# Once per server after login:
+#  - persistent connection = ALWAYS (needed for commands from HA without Google services)
+#  - home Wi-Fi = currently connected Wi-Fi, if none is set yet
 fix_server_settings() {
   [ -f "$DB" ] || return 0
   ws=$(sqlite3 "$DB" "select count(*) from settings where websocket_setting != 'ALWAYS';" 2>/dev/null)
@@ -28,19 +28,19 @@ fix_server_settings() {
   am force-stop "$PKG"; sleep 1
   if [ "${ws:-0}" -gt 0 ] 2>/dev/null; then
     sqlite3 "$DB" "update settings set websocket_setting = 'ALWAYS';"
-    log "dauerhafte Verbindung -> ALWAYS ($ws Server)"
+    log "persistent connection -> ALWAYS ($ws server(s))"
   fi
   if [ "${wl:-0}" -gt 0 ] 2>/dev/null; then
     q=$(echo "$ssid" | sed "s/'/''/g")
     sqlite3 "$DB" "update servers set internal_ssids = '[\"$q\"]' where internal_ssids = '[]';"
-    log "Heim-WLAN -> $ssid ($wl Server)"
+    log "home Wi-Fi -> $ssid ($wl server(s))"
   fi
   am start -n "$ACT" >/dev/null 2>&1
 }
 
-# Erst nach abgeschlossener Ersteinrichtung eingreifen
+# Only act once the setup wizard has finished
 until [ "$(settings get secure user_setup_complete 2>/dev/null)" = "1" ]; do sleep 15; done
-log "Ersteinrichtung abgeschlossen -> Home Assistant einrichten"
+log "setup wizard finished -> setting up Home Assistant"
 /system/bin/f83w-boot.sh ha
 
 foreign=0; last_restart=""
@@ -50,10 +50,10 @@ while true; do
   fix_server_settings
   dumpsys power | grep -q "mWakefulness=Awake" || continue
 
-  # naechtlicher Neustart der App
+  # nightly app restart
   now=$(date +%H%M | sed "s/^0*//"); now=${now:-0}; today=$(date +%Y%m%d)
   if [ "$now" -ge "$RESTART_AT" ] && [ "$last_restart" != "$today" ] && [ "$now" -lt $((RESTART_AT + 10)) ]; then
-    log "naechtlicher Neustart von $PKG"
+    log "nightly restart of $PKG"
     am force-stop "$PKG"; sleep 2; am start -n "$ACT" >/dev/null 2>&1
     last_restart=$today; foreign=0; continue
   fi
@@ -64,7 +64,7 @@ while true; do
     *)
       foreign=$((foreign + INTERVAL))
       if [ -z "$top" ] || [ "$foreign" -ge "$GRACE" ]; then
-        log "Home Assistant nicht im Vordergrund (${top:-keine Activity}) -> zurueckholen"
+        log "Home Assistant not in the foreground (${top:-no activity}) -> bringing it back"
         am start -n "$ACT" >/dev/null 2>&1; foreign=0
       fi ;;
   esac

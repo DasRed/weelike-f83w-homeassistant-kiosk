@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  F83W -> Home-Assistant-Wanddisplay
+#  F83W -> Home Assistant wall panel
 #
-#  Baut ein Weelikeit F83W (Allwinner A133, Android 13 Werksfirmware) zu einem
-#  schlanken LineageOS-20-Wanddisplay mit fest eingebauter Home-Assistant-App um.
+#  Turns a Weelikeit F83W (Allwinner A133, stock Android 13) into a slim
+#  LineageOS 20 wall panel with the Home Assistant app built in.
 #
-#  Ablauf: Voraussetzungen -> Tablet verbinden -> Bootloader entsperren ->
-#          System flashen -> Ersteinrichtung -> Home-Assistant-Anmeldung
+#  Flow: prerequisites -> connect tablet -> unlock bootloader ->
+#        flash system -> setup wizard -> Home Assistant login
 #
-#  Laeuft auf macOS. Bereits erledigte Schritte werden erkannt und uebersprungen,
-#  das Skript kann also jederzeit neu gestartet werden.
+#  Runs on macOS. Completed steps are detected and skipped, so the script can
+#  be restarted at any time.
 # =============================================================================
 set -u
 
 cd "$(dirname "$0")" || exit 1
 ROOT=$(pwd)
-# Das System-Image baut GitHub Actions (tools/build_image.py) und legt es als Release ab.
+# The system image is built by GitHub Actions (tools/build_image.py) and published as a release.
 IMAGE_VERSION="${F83W_IMAGE_VERSION:-v8}"
 IMAGE_NAME="lineage-20-a64_bvS-f83w-$IMAGE_VERSION.img"
 IMAGE="images/$IMAGE_NAME"
@@ -30,7 +30,7 @@ mkdir -p "$LOGDIR"
 LOG="$LOGDIR/flash-$(date +%Y%m%d-%H%M%S).log"
 exec > >(tee -a "$LOG") 2>&1
 
-# ----------------------------------------------------------------------------- Ausgabe
+# ----------------------------------------------------------------------------- Output
 if [ -t 1 ] || [ -n "${FORCE_COLOR:-}" ]; then
   B=$'\033[1m'; G=$'\033[32m'; Y=$'\033[33m'; R=$'\033[31m'; C=$'\033[36m'; N=$'\033[0m'
 else B=""; G=""; Y=""; R=""; C=""; N=""; fi
@@ -38,17 +38,17 @@ step()  { echo; echo "${B}${C}==> $*${N}"; }
 info()  { echo "    $*"; }
 ok()    { echo "    ${G}OK${N}  $*"; }
 warn()  { echo "    ${Y}!!${N}  $*"; }
-fail()  { echo; echo "${R}${B}FEHLER:${N} $*"; echo "Protokoll: $LOG"; exit 1; }
-ask()   { local a; read -r -p "    ${B}?${N}  $* [j/N] " a </dev/tty; case "$a" in j|J|ja|Ja|y|Y) return 0;; *) return 1;; esac; }
-pause() { read -r -p "    ${B}>${N}  $* – weiter mit Enter " _ </dev/tty; }
+fail()  { echo; echo "${R}${B}ERROR:${N} $*"; echo "Log: $LOG"; exit 1; }
+ask()   { local a; read -r -p "    ${B}?${N}  $* [y/N] " a </dev/tty; case "$a" in y|Y|yes|Yes|YES) return 0;; *) return 1;; esac; }
+pause() { read -r -p "    ${B}>${N}  $* – press Enter to continue " _ </dev/tty; }
 
-# wait_until "Beschreibung" TIMEOUT_SEKUNDEN befehl...  (0 = unbegrenzt)
+# wait_until "description" TIMEOUT_SECONDS command...  (0 = no limit)
 wait_until() {
   local desc=$1 timeout=$2; shift 2
   local start=$SECONDS n=0
   printf "    ... %s " "$desc"
   while ! "$@" >/dev/null 2>&1; do
-    if [ "$timeout" -gt 0 ] && [ $((SECONDS - start)) -ge "$timeout" ]; then echo " ${Y}(Zeit abgelaufen)${N}"; return 1; fi
+    if [ "$timeout" -gt 0 ] && [ $((SECONDS - start)) -ge "$timeout" ]; then echo " ${Y}(timed out)${N}"; return 1; fi
     n=$((n + 1)); [ $((n % 5)) -eq 0 ] && printf "."
     sleep 2
   done
@@ -67,226 +67,226 @@ fb_userspace()   { fb_present && [ "$(fb_var is-userspace)" = "yes" ]; }
 boot_completed() { adb_ready && [ "$(prop sys.boot_completed)" = "1" ]; }
 setup_complete() { adb_ready && [ "$(adb shell settings get secure user_setup_complete 2>/dev/null | tr -d '\r')" = "1" ]; }
 pyfb()           { "$VENV/bin/python" "$ROOT/tools/fastboot_usb.py" "$@"; }
-# SQL auf der App-Datenbank (als root). SQL darf nur einfache Anfuehrungszeichen enthalten.
+# SQL on the app database (as root). SQL may only contain single quotes.
 hadb()           { adb shell "su -c \"sqlite3 $HA_DB \\\"$1\\\"\"" 2>/dev/null | tr -d '\r'; }
 oem_allowed()    { [ "$(prop sys.oem_unlock_allowed)" = "1" ]; }
 ha_is_home()     { adb shell cmd package resolve-activity -c android.intent.category.HOME -a android.intent.action.MAIN 2>/dev/null | grep -q "$PKG"; }
 ha_logged_in()   { [ "$(hadb "select count(*) from servers;")" -ge 1 ] 2>/dev/null; }
 ha_ssid_set()    { [ "$(hadb "select count(*) from servers where internal_ssids != '[]';")" -ge 1 ] 2>/dev/null; }
 
-# ----------------------------------------------------------------------------- 1. Voraussetzungen
+# ----------------------------------------------------------------------------- 1. Prerequisites
 prerequisites() {
-  step "1/7  Voraussetzungen auf dem Mac"
-  [ "$(uname -s)" = "Darwin" ] || fail "Dieses Skript ist fuer macOS gedacht."
+  step "1/7  Prerequisites on the Mac"
+  [ "$(uname -s)" = "Darwin" ] || fail "This script is meant for macOS."
   command -v python3 >/dev/null 2>&1 \
-    || fail "python3 fehlt. Bitte 'xcode-select --install' ausfuehren und das Skript neu starten."
+    || fail "python3 is missing. Run 'xcode-select --install' and start the script again."
 
   if ! command -v brew >/dev/null 2>&1; then
     for p in /opt/homebrew/bin/brew /usr/local/bin/brew; do [ -x "$p" ] && eval "$("$p" shellenv)"; done
   fi
   if ! command -v brew >/dev/null 2>&1; then
-    warn "Homebrew ist nicht installiert."
-    ask "Homebrew jetzt installieren (offizielles Installationsskript von brew.sh)?" || fail "Homebrew wird benoetigt."
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || fail "Homebrew-Installation fehlgeschlagen."
+    warn "Homebrew is not installed."
+    ask "Install Homebrew now (official installer from brew.sh)?" || fail "Homebrew is required."
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || fail "Homebrew installation failed."
     for p in /opt/homebrew/bin/brew /usr/local/bin/brew; do [ -x "$p" ] && eval "$("$p" shellenv)"; done
   fi
   ok "Homebrew: $(brew --version | head -1)"
 
   if ! command -v adb >/dev/null 2>&1 || ! command -v fastboot >/dev/null 2>&1; then
-    info "Installiere android-platform-tools (adb, fastboot)"
-    brew install android-platform-tools || fail "brew install android-platform-tools fehlgeschlagen."
+    info "Installing android-platform-tools (adb, fastboot)"
+    brew install android-platform-tools || fail "brew install android-platform-tools failed."
   fi
   ok "adb/fastboot: $(adb version | head -1)"
 
   if ! command -v xz >/dev/null 2>&1; then
-    info "Installiere xz (zum Entpacken des System-Images)"
-    brew install xz || fail "brew install xz fehlgeschlagen."
+    info "Installing xz (to unpack the system image)"
+    brew install xz || fail "brew install xz failed."
   fi
 
-  [ -f "$VBMETA" ] || fail "images/vbmeta_disabled.img fehlt."
+  [ -f "$VBMETA" ] || fail "images/vbmeta_disabled.img is missing."
   (cd images && grep -E "  vbmeta_disabled.img$" SHA256SUMS | shasum -a 256 -c - >/dev/null 2>&1) \
-    || fail "Pruefsumme von images/vbmeta_disabled.img stimmt nicht."
+    || fail "Checksum of images/vbmeta_disabled.img does not match."
   fetch_image
-  ok "Images vollstaendig ($IMAGE_VERSION)"
+  ok "Images complete ($IMAGE_VERSION)"
 }
 
-# System-Image aus dem GitHub-Release laden, pruefen und entpacken
+# Download the system image from the GitHub release, verify and unpack it
 image_ok() { (cd images && grep -E "  $IMAGE_NAME$" "$(basename "$IMAGE_SUMS")" | shasum -a 256 -c - >/dev/null 2>&1); }
 fetch_image() {
   if [ ! -f "$IMAGE_SUMS" ]; then
     curl -fsSL -o "$IMAGE_SUMS.part" "$RELEASE_URL/SHA256SUMS" && mv "$IMAGE_SUMS.part" "$IMAGE_SUMS" \
-      || fail "Release $IMAGE_VERSION nicht gefunden: $RELEASE_URL"
+      || fail "Release $IMAGE_VERSION not found: $RELEASE_URL"
   fi
   if [ -f "$IMAGE" ]; then
-    info "Pruefe vorhandenes System-Image (dauert einen Moment) ..."
+    info "Checking existing system image (takes a moment) ..."
     image_ok && return 0
-    warn "Vorhandenes System-Image passt nicht zu $IMAGE_VERSION – lade es neu."
+    warn "Existing system image does not match $IMAGE_VERSION – downloading it again."
     rm -f "$IMAGE"
   fi
   if [ ! -f "$IMAGE.xz" ] || ! (cd images && grep -E "  $IMAGE_NAME.xz$" "$(basename "$IMAGE_SUMS")" | shasum -a 256 -c - >/dev/null 2>&1); then
-    info "Lade System-Image $IMAGE_VERSION aus dem GitHub-Release (ca. 650 MB) ..."
+    info "Downloading system image $IMAGE_VERSION from the GitHub release (about 650 MB) ..."
     curl -fL --progress-bar -C - -o "$IMAGE.xz.part" "$RELEASE_URL/$IMAGE_NAME.xz" && mv "$IMAGE.xz.part" "$IMAGE.xz" \
-      || fail "Download fehlgeschlagen: $RELEASE_URL/$IMAGE_NAME.xz (erneuter Start setzt den Download fort)"
+      || fail "Download failed: $RELEASE_URL/$IMAGE_NAME.xz (restarting the script resumes the download)"
     (cd images && grep -E "  $IMAGE_NAME.xz$" "$(basename "$IMAGE_SUMS")" | shasum -a 256 -c - >/dev/null 2>&1) \
-      || { rm -f "$IMAGE.xz"; fail "Pruefsumme des Downloads stimmt nicht – bitte Skript neu starten."; }
+      || { rm -f "$IMAGE.xz"; fail "Checksum of the download does not match – please restart the script."; }
   fi
-  info "Entpacke System-Image ..."
-  xz -dkf "$IMAGE.xz" || fail "Entpacken fehlgeschlagen."
-  image_ok || fail "Pruefsumme des entpackten Images stimmt nicht – Dateien in images/ loeschen und Skript neu starten."
+  info "Unpacking system image ..."
+  xz -dkf "$IMAGE.xz" || fail "Unpacking failed."
+  image_ok || fail "Checksum of the unpacked image does not match – delete the files in images/ and restart the script."
 }
 
-# ----------------------------------------------------------------------------- 2. Tablet verbinden
+# ----------------------------------------------------------------------------- 2. Connect tablet
 connect_device() {
-  step "2/7  Tablet verbinden"
+  step "2/7  Connect the tablet"
   if ! adb_ready; then
-    info "Auf dem Tablet (Werksfirmware) bitte:"
-    info "  1. Einrichtung bis zum Startbildschirm durchklicken (WLAN/Google-Konto koennen uebersprungen werden)"
-    info "  2. Einstellungen -> Ueber das Tablet -> 7x auf 'Build-Nummer' tippen"
-    info "  3. Einstellungen -> System -> Entwickleroptionen -> 'USB-Debugging' einschalten"
-    info "  4. Tablet mit einem DATENKABEL an den Mac anschliessen (reine Ladekabel gehen nicht)"
-    info "  5. Abfrage 'USB-Debugging zulassen?' auf dem Tablet bestaetigen"
+    info "On the tablet (stock firmware), please:"
+    info "  1. Go through the setup until the home screen (Wi-Fi and Google account can be skipped)"
+    info "  2. Settings -> About tablet -> tap 'Build number' 7 times"
+    info "  3. Settings -> System -> Developer options -> turn on 'USB debugging'"
+    info "  4. Connect the tablet to the Mac with a DATA cable (charge-only cables don't work)"
+    info "  5. Confirm 'Allow USB debugging?' on the tablet"
     local warned=0
-    printf "    ... warte auf das Tablet "
+    printf "    ... waiting for the tablet "
     while ! adb_ready; do
-      if adb_unauth && [ $warned -eq 0 ]; then echo; warn "Tablet gefunden, aber nicht freigegeben – bitte Abfrage auf dem Tablet bestaetigen"; printf "    ... "; warned=1; fi
+      if adb_unauth && [ $warned -eq 0 ]; then echo; warn "Tablet found but not authorized – please confirm the prompt on the tablet"; printf "    ... "; warned=1; fi
       printf "."; sleep 2
     done
     echo " ${G}ok${N}"
   fi
-  [ "$(adb_count)" = "1" ] || fail "Es ist mehr als ein Android-Geraet verbunden. Bitte nur das Tablet anschliessen."
+  [ "$(adb_count)" = "1" ] || fail "More than one Android device is connected. Please connect only the tablet."
   export ANDROID_SERIAL; ANDROID_SERIAL=$(adb get-serialno | tr -d '\r')
 
   local dev hw inc lin locked
   dev=$(prop ro.product.vendor.device); hw=$(prop ro.boot.hardware)
   inc=$(prop ro.vendor.build.version.incremental); lin=$(prop ro.lineage.version)
   locked=$(prop ro.boot.flash.locked)
-  info "Seriennummer: $ANDROID_SERIAL"
-  info "Geraet: $dev / Hardware: $hw / Vendor-Build: $inc"
-  [ -n "$lin" ] && info "Aktuelles System: LineageOS $lin"
+  info "Serial number: $ANDROID_SERIAL"
+  info "Device: $dev / hardware: $hw / vendor build: $inc"
+  [ -n "$lin" ] && info "Current system: LineageOS $lin"
   adb shell getprop > "$LOGDIR/$ANDROID_SERIAL-getprop-$(date +%Y%m%d-%H%M%S).txt" 2>/dev/null
 
-  [ "$dev" = "F83W" ] && [ "$hw" = "sun50iw10p1" ] || { warn "Das ist kein Weelikeit F83W mit Allwinner A133."; ask "Trotzdem fortfahren (auf eigenes Risiko)?" || exit 1; }
-  [ "$inc" = "20231212" ] || { warn "Abweichende Werksfirmware ($inc statt 20231212) – Image ist dafuer nicht getestet."; ask "Trotzdem fortfahren?" || exit 1; }
+  [ "$dev" = "F83W" ] && [ "$hw" = "sun50iw10p1" ] || { warn "This is not a Weelikeit F83W with Allwinner A133."; ask "Continue anyway (at your own risk)?" || exit 1; }
+  [ "$inc" = "20231212" ] || { warn "Different stock firmware ($inc instead of 20231212) – the image is not tested with it."; ask "Continue anyway?" || exit 1; }
 
   local lvl; lvl=$(adb shell dumpsys battery 2>/dev/null | awk '/level:/{print $2; exit}' | tr -d '\r')
-  if [ -n "$lvl" ] && [ "$lvl" -lt 40 ]; then warn "Akku nur bei $lvl % – bitte waehrend des Vorgangs am Netzteil lassen."; fi
+  if [ -n "$lvl" ] && [ "$lvl" -lt 40 ]; then warn "Battery only at $lvl % – please keep the tablet on the charger during the process."; fi
 
-  if [ "$locked" = "0" ]; then ok "Bootloader ist bereits entsperrt"; else info "Bootloader ist gesperrt"; fi
+  if [ "$locked" = "0" ]; then ok "Bootloader is already unlocked"; else info "Bootloader is locked"; fi
   if [ -n "$lin" ] && adb shell ls /system/bin/f83w-watchdog.sh >/dev/null 2>&1; then
-    ok "Das F83W-System ist bereits installiert"
-    ask "Trotzdem neu flashen? (ALLE Daten auf dem Tablet werden geloescht)" || SKIP_FLASH=1
+    ok "The F83W system is already installed"
+    ask "Flash again anyway? (ALL data on the tablet will be erased)" || SKIP_FLASH=1
   fi
 }
 
-# Notfallweg fuer den Allwinner-Bootloader: libusb + pyusb nur bei Bedarf installieren
+# Fallback for the Allwinner bootloader: install libusb + pyusb only when needed
 usb_fallback_ready() {
-  brew list libusb >/dev/null 2>&1 || { info "Installiere libusb"; brew install libusb || return 1; }
+  brew list libusb >/dev/null 2>&1 || { info "Installing libusb"; brew install libusb || return 1; }
   if [ ! -x "$VENV/bin/python" ] || ! "$VENV/bin/python" -c "import usb" >/dev/null 2>&1; then
-    info "Lege Python-Umgebung mit pyusb an ($VENV)"
+    info "Creating Python environment with pyusb ($VENV)"
     python3 -m venv "$VENV" && "$VENV/bin/pip" install -q --upgrade pip pyusb || return 1
   fi
 }
 
-# ----------------------------------------------------------------------------- 3. Bootloader entsperren
+# ----------------------------------------------------------------------------- 3. Unlock bootloader
 unlock_bootloader() {
   [ "$(prop ro.boot.flash.locked)" = "0" ] && return 0
-  step "3/7  Bootloader entsperren"
-  warn "Beim Entsperren werden ALLE Daten auf dem Tablet geloescht."
-  ask "Bootloader jetzt entsperren?" || exit 1
+  step "3/7  Unlock the bootloader"
+  warn "Unlocking erases ALL data on the tablet."
+  ask "Unlock the bootloader now?" || exit 1
 
   if ! oem_allowed; then
-    info "Bitte in den Entwickleroptionen 'OEM-Entsperrung' einschalten."
-    wait_until "warte auf OEM-Entsperrung" 0 oem_allowed
+    info "Please turn on 'OEM unlocking' in the developer options."
+    wait_until "waiting for OEM unlocking" 0 oem_allowed
   fi
-  ok "OEM-Entsperrung erlaubt"
+  ok "OEM unlocking allowed"
 
-  info "Starte in den Bootloader (gruenes Maennchen) ..."
+  info "Rebooting into the bootloader (green Android robot) ..."
   adb reboot bootloader
   local done_unlock=0
-  if wait_until "warte auf Fastboot (macOS-fastboot)" 25 fb_present; then
+  if wait_until "waiting for fastboot (macOS fastboot)" 25 fb_present; then
     fastboot oem unlock && done_unlock=1
     [ $done_unlock -eq 1 ] && fastboot reboot >/dev/null 2>&1
   fi
   if [ $done_unlock -eq 0 ]; then
-    info "macOS-fastboot sieht den Allwinner-Bootloader nicht – versuche direkten USB-Zugriff (libusb) ..."
+    info "macOS fastboot doesn't see the Allwinner bootloader – trying direct USB access (libusb) ..."
     if usb_fallback_ready && pyfb wait 20 && pyfb oem unlock; then
       done_unlock=1; pyfb reboot >/dev/null 2>&1
     fi
   fi
   if [ $done_unlock -eq 0 ]; then
-    warn "Entsperren vom Mac aus nicht moeglich. Ausweg ueber einen Windows-PC (einmalig):"
-    info "  1. Google Platform Tools + Google USB Driver laden (developer.android.com)"
-    info "  2. Tablet steht im Bootloader (gruenes Maennchen); im Geraete-Manager 'USB Developer'"
-    info "     -> Treiber aktualisieren -> android_winusb.inf -> 'Android Bootloader Interface'"
-    info "  3. .\\fastboot oem unlock   und danach   .\\fastboot reboot"
-    pause "Wenn das Tablet entsperrt ist und wieder hochfaehrt, das Kabel zurueck an den Mac"
+    warn "Unlocking from the Mac is not possible. Workaround via a Windows PC (one time):"
+    info "  1. Download Google Platform Tools + Google USB Driver (developer.android.com)"
+    info "  2. With the tablet in the bootloader (green robot), open Device Manager -> 'USB Developer'"
+    info "     -> Update driver -> android_winusb.inf -> 'Android Bootloader Interface'"
+    info "  3. .\\fastboot oem unlock   and then   .\\fastboot reboot"
+    pause "Once the tablet is unlocked and booting again, plug the cable back into the Mac"
   fi
 
-  info "Das Tablet startet neu. Falls es dabei zurueckgesetzt wurde: Einrichtung durchklicken,"
-  info "Entwickleroptionen und USB-Debugging wieder einschalten (siehe Schritt 2)."
-  wait_until "warte auf das Tablet" 0 adb_ready
-  [ "$(prop ro.boot.flash.locked)" = "0" ] || fail "Bootloader ist weiterhin gesperrt (ro.boot.flash.locked=$(prop ro.boot.flash.locked))."
-  ok "Bootloader entsperrt (Status: $(prop ro.boot.verifiedbootstate))"
+  info "The tablet reboots. If it was reset in the process: go through the setup,"
+  info "turn developer options and USB debugging on again (see step 2)."
+  wait_until "waiting for the tablet" 0 adb_ready
+  [ "$(prop ro.boot.flash.locked)" = "0" ] || fail "Bootloader is still locked (ro.boot.flash.locked=$(prop ro.boot.flash.locked))."
+  ok "Bootloader unlocked (state: $(prop ro.boot.verifiedbootstate))"
 }
 
-# ----------------------------------------------------------------------------- 4. Flashen
+# ----------------------------------------------------------------------------- 4. Flash
 flash_system() {
   [ "${SKIP_FLASH:-0}" = "1" ] && return 0
-  step "4/7  System flashen"
+  step "4/7  Flash the system"
   adb reboot fastboot
-  wait_until "warte auf fastbootd" 120 fb_userspace || fail "fastbootd nicht erreichbar. Tablet aus, Lauter+Power halten -> Recovery -> 'Enter fastboot', dann Skript neu starten."
+  wait_until "waiting for fastbootd" 120 fb_userspace || fail "fastbootd not reachable. Turn the tablet off, hold Volume Up + Power -> recovery -> 'Enter fastboot', then restart the script."
   local slot; slot=$(fb_var current-slot); [ -n "$slot" ] || slot=a
-  info "Aktiver Slot: $slot"
-  fastboot --disable-verity --disable-verification flash "vbmeta_$slot" "$VBMETA" || fail "vbmeta flashen fehlgeschlagen"
-  fastboot delete-logical-partition "product_$slot" >/dev/null 2>&1 && info "product_$slot entfernt (Platz fuer das System)"
-  fastboot erase "system_$slot"                     || fail "system_$slot loeschen fehlgeschlagen"
-  fastboot flash "system_$slot" "$IMAGE"            || fail "System flashen fehlgeschlagen"
-  fastboot -w                                       || warn "Datenbereich loeschen meldete einen Fehler (wird beim Start neu angelegt)"
+  info "Active slot: $slot"
+  fastboot --disable-verity --disable-verification flash "vbmeta_$slot" "$VBMETA" || fail "Flashing vbmeta failed"
+  fastboot delete-logical-partition "product_$slot" >/dev/null 2>&1 && info "product_$slot removed (room for the system)"
+  fastboot erase "system_$slot"                     || fail "Erasing system_$slot failed"
+  fastboot flash "system_$slot" "$IMAGE"            || fail "Flashing the system failed"
+  fastboot -w                                       || warn "Wiping userdata reported an error (it is recreated on boot)"
   fastboot reboot
-  ok "System geflasht"
+  ok "System flashed"
 }
 
-# ----------------------------------------------------------------------------- 5. Erster Start
+# ----------------------------------------------------------------------------- 5. First boot
 first_boot() {
-  step "5/7  Erster Start"
-  info "Der erste Start dauert 3-5 Minuten (Lineage-Startanimation)."
-  wait_until "warte auf ADB" 600 adb_ready     || fail "Tablet meldet sich nicht. Siehe Fehlerbehebung in README.md."
-  wait_until "warte auf Systemstart" 600 boot_completed || fail "System startet nicht fertig."
-  case "$(prop ro.lineage.version)" in *a64_bvS*) ok "LineageOS $(prop ro.lineage.version) laeuft";; *) fail "Unerwartetes System: $(prop ro.lineage.version)";; esac
-  [ "$(prop ro.surface_flinger.primary_display_orientation)" = "ORIENTATION_90" ] && ok "Querformat aktiv"
+  step "5/7  First boot"
+  info "The first boot takes 3-5 minutes (LineageOS boot animation)."
+  wait_until "waiting for ADB" 600 adb_ready     || fail "The tablet does not respond. See Troubleshooting in README.md."
+  wait_until "waiting for boot to complete" 600 boot_completed || fail "The system does not finish booting."
+  case "$(prop ro.lineage.version)" in *a64_bvS*) ok "LineageOS $(prop ro.lineage.version) is running";; *) fail "Unexpected system: $(prop ro.lineage.version)";; esac
+  [ "$(prop ro.surface_flinger.primary_display_orientation)" = "ORIENTATION_90" ] && ok "Landscape orientation active"
 }
 
-# ----------------------------------------------------------------------------- 6. Ersteinrichtung
+# ----------------------------------------------------------------------------- 6. Setup wizard
 setup_wizard() {
-  step "6/7  Ersteinrichtung (Lineage-Assistent)"
+  step "6/7  Setup wizard (LineageOS)"
   if ! setup_complete; then
-    info "Bitte auf dem Tablet den Einrichtungsassistenten durchgehen:"
-    info "  Sprache Deutsch, WLAN verbinden, Datum/Uhrzeit – der Rest kann uebersprungen werden."
-    wait_until "warte auf Abschluss der Einrichtung" 0 setup_complete
+    info "Please go through the setup wizard on the tablet:"
+    info "  Language, Wi-Fi, date/time – everything else can be skipped."
+    wait_until "waiting for the setup to finish" 0 setup_complete
   fi
-  ok "Einrichtung abgeschlossen"
-  wait_until "warte auf Home Assistant als Startbildschirm" 120 ha_is_home \
-    && ok "Home Assistant ist Startbildschirm" || warn "Home Assistant ist (noch) nicht Startbildschirm"
+  ok "Setup finished"
+  wait_until "waiting for Home Assistant as home app" 120 ha_is_home \
+    && ok "Home Assistant is the home app" || warn "Home Assistant is not the home app (yet)"
 }
 
 # ----------------------------------------------------------------------------- 7. Home Assistant
 home_assistant() {
   step "7/7  Home Assistant"
-  info "Bitte in der Home-Assistant-App auf dem Tablet:"
-  info "  Server waehlen, mit dem Wanddisplay-Benutzer anmelden, Abfragen bestaetigen."
-  wait_until "warte auf Anmeldung" 0 ha_logged_in
-  ok "Angemeldet"
-  info "Der Waechter traegt jetzt Heim-WLAN und dauerhafte Verbindung ein und startet die App einmal neu ..."
-  wait_until "warte auf Waechter" 180 ha_ssid_set \
-    && ok "Heim-WLAN: $(hadb "select internal_ssids from servers limit 1;")" \
-    || warn "Heim-WLAN wurde nicht automatisch eingetragen (WLAN verbunden?)"
-  ok "Dauerhafte Verbindung: $(hadb "select group_concat(websocket_setting) from settings;")"
+  info "In the Home Assistant app on the tablet, please:"
+  info "  choose your server, log in with the wall panel user, confirm the prompts."
+  wait_until "waiting for login" 0 ha_logged_in
+  ok "Logged in"
+  info "The watchdog now sets the home Wi-Fi and the persistent connection and restarts the app once ..."
+  wait_until "waiting for the watchdog" 180 ha_ssid_set \
+    && ok "Home Wi-Fi: $(hadb "select internal_ssids from servers limit 1;")" \
+    || warn "Home Wi-Fi was not set automatically (is Wi-Fi connected?)"
+  ok "Persistent connection: $(hadb "select group_concat(websocket_setting) from settings;")"
   adb logcat -d -s f83w f83w-watchdog > "$LOGDIR/$ANDROID_SERIAL-f83w-$(date +%Y%m%d-%H%M%S).log" 2>/dev/null
-  info "Jetzt noch in der App das Standard-Dashboard waehlen."
+  info "Finally, choose the default dashboard in the app."
 }
 
-# ----------------------------------------------------------------------------- Hauptablauf
-echo "${B}F83W -> Home-Assistant-Wanddisplay${N}   (Protokoll: $LOG)"
+# ----------------------------------------------------------------------------- Main
+echo "${B}F83W -> Home Assistant wall panel${N}   (log: $LOG)"
 prerequisites
 connect_device
 unlock_bootloader
@@ -294,6 +294,6 @@ flash_system
 first_boot
 setup_wizard
 home_assistant
-step "Fertig"
-ok "Tablet $ANDROID_SERIAL ist eingerichtet."
-info "Helligkeit aus Home Assistant: notify.mobile_app_<geraet> mit message 'command_screen_brightness_level'."
+step "Done"
+ok "Tablet $ANDROID_SERIAL is set up."
+info "Brightness from Home Assistant: notify.mobile_app_<device> with message 'command_screen_brightness_level'."
