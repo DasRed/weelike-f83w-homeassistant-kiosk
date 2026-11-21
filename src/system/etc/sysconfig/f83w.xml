@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- F83W: Home Assistant von Akku-/Datensparmassnahmen ausnehmen -->
+<!-- F83W: exempt Home Assistant from battery and data saver restrictions -->
 <config>
     <allow-in-power-save package="io.homeassistant.companion.android.minimal" />
     <allow-in-data-usage-save package="io.homeassistant.companion.android.minimal" />

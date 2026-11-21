@@ -1,10 +1,10 @@
-# Dateien und Ordner, die build_image.py ins System-Image schreibt.
+# Files and directories that build_image.py writes into the system image.
 #
-# Ziel im Image                  Quelle (relativ zu src/)          Modus  UID  GID   SELinux-Typ
-# Ordner enden auf "/" und haben keine Quelle ("-").
+# Target in the image            Source (relative to src/)         Mode   UID  GID   SELinux type
+# Directories end with "/" and have no source ("-").
 #
-# phhsu_exec: Skripte, die im permissiven Kontext phhsu_daemon laufen (wie rw-system.sh)
-# vendor_configs_file: wird per Bind-Mount ueber /vendor/etc/gsensor.cfg gelegt
+# phhsu_exec: scripts that run in the permissive phhsu_daemon context (like rw-system.sh)
+# vendor_configs_file: bind-mounted over /vendor/etc/gsensor.cfg
 
 /system/bin/f83w-boot.sh         system/bin/f83w-boot.sh           0755   0    2000  phhsu_exec
 /system/bin/f83w-watchdog.sh     system/bin/f83w-watchdog.sh       0755   0    2000  phhsu_exec

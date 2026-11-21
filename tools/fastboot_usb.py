@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
 """
-Minimaler Fastboot-Client ueber libusb (pyusb).
+Minimal fastboot client on top of libusb (pyusb).
 
-Zweck: Der Allwinner-Bootloader (u-boot-Fastboot, VID 0x1F3A / PID 0x1010)
-wird vom macOS-`fastboot` nicht immer erkannt, weil macOS fuer dieses
-Hersteller-Geraet keine USB-Konfiguration aktiviert. Dieses Skript setzt die
-Konfiguration selbst und spricht das Fastboot-Protokoll direkt.
+Purpose: the Allwinner bootloader (u-boot fastboot, VID 0x1F3A / PID 0x1010)
+is not always detected by the macOS `fastboot`, because macOS does not activate
+a USB configuration for this vendor device. This script selects the
+configuration itself and speaks the fastboot protocol directly.
 
-Aufruf:
-    fastboot_usb.py wait [SEKUNDEN]      # wartet, bis ein Fastboot-Geraet da ist
+Usage:
+    fastboot_usb.py wait [SECONDS]       # waits until a fastboot device is present
     fastboot_usb.py getvar <name>
-    fastboot_usb.py oem <befehl...>      # z. B. "oem unlock"
+    fastboot_usb.py oem <command...>     # e.g. "oem unlock"
     fastboot_usb.py reboot
 
-Exit-Code 0 = OKAY, 1 = FAIL/Fehler, 2 = kein Geraet gefunden.
+Exit code 0 = OKAY, 1 = FAIL/error, 2 = no device found.
 """
 import os
 import sys
@@ -24,7 +24,7 @@ try:
     import usb.util
     import usb.backend.libusb1
 except ImportError:
-    print("pyusb fehlt (pip install pyusb)", file=sys.stderr)
+    print("pyusb is missing (pip install pyusb)", file=sys.stderr)
     sys.exit(1)
 
 FASTBOOT_IFACE = (0xFF, 0x42, 0x03)  # Class / SubClass / Protocol
@@ -34,7 +34,7 @@ def backend():
     candidates = [
         os.environ.get("LIBUSB_PATH", ""),
         "/opt/homebrew/lib/libusb-1.0.dylib",  # Apple Silicon (Homebrew)
-        "/usr/local/lib/libusb-1.0.dylib",     # Intel-Mac (Homebrew)
+        "/usr/local/lib/libusb-1.0.dylib",     # Intel Mac (Homebrew)
     ]
     for path in candidates:
         if path and os.path.exists(path):
@@ -45,7 +45,7 @@ def backend():
 def find_device():
     be = backend()
     if be is None:
-        print("libusb nicht gefunden (brew install libusb)", file=sys.stderr)
+        print("libusb not found (brew install libusb)", file=sys.stderr)
         sys.exit(1)
     for dev in usb.core.find(find_all=True, backend=be):
         try:
@@ -80,14 +80,14 @@ def open_device():
     ep_in = usb.util.find_descriptor(
         intf, custom_match=lambda e: usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_IN)
     if ep_out is None or ep_in is None:
-        raise RuntimeError("Fastboot-Endpunkte nicht gefunden")
+        raise RuntimeError("fastboot endpoints not found")
     return dev, ep_out, ep_in
 
 
 def command(cmd, timeout_s=60):
     opened = open_device()
     if not opened:
-        print("kein Fastboot-Geraet gefunden", file=sys.stderr)
+        print("no fastboot device found", file=sys.stderr)
         return 2
     _dev, ep_out, ep_in = opened
     ep_out.write(cmd.encode("ascii"), timeout=5000)
@@ -98,10 +98,10 @@ def command(cmd, timeout_s=60):
         except usb.core.USBTimeoutError:
             continue
         except usb.core.USBError as exc:
-            # Bei "reboot" verschwindet das Geraet oft vor der Antwort
+            # On "reboot" the device often disappears before answering
             if cmd == "reboot":
                 return 0
-            print(f"USB-Fehler: {exc}", file=sys.stderr)
+            print(f"USB error: {exc}", file=sys.stderr)
             return 1
         kind, payload = raw[:4].decode("ascii", "replace"), raw[4:].decode("utf-8", "replace")
         if kind in ("INFO", "TEXT"):
@@ -114,9 +114,9 @@ def command(cmd, timeout_s=60):
         if kind == "FAIL":
             print(f"FAILED: {payload}", file=sys.stderr)
             return 1
-        print(f"unerwartete Antwort: {raw!r}", file=sys.stderr)
+        print(f"unexpected response: {raw!r}", file=sys.stderr)
         return 1
-    print("Zeitueberschreitung", file=sys.stderr)
+    print("timeout", file=sys.stderr)
     return 1
 
 

@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
 """
-Baut das F83W-System-Image aus dem Original-GSI und den Dateien in src/.
+Builds the F83W system image from the original GSI and the files in src/.
 
-Ablauf:
-  1. GSI und Home-Assistant-App laden (build/sources.json, mit SHA-256-Pruefung)
-  2. ext4-Image vergroessern und shared_blocks aufloesen (sonst nicht beschreibbar)
-  3. mit debugfs aendern:
-       - Apps aus src/removed-apps.txt entfernen
-       - Home-Assistant-App als System-App einspielen (Bibliotheken entpackt unter lib/arm/)
-       - Dateien aus src/system-files.txt schreiben (Modus, Besitzer, SELinux-Label)
-       - src/system/bin/rw-system.sh.patch auf /system/bin/rw-system.sh anwenden
-       - src/product/build.prop.append an /system/product/etc/build.prop anhaengen
-  4. Dateisystem pruefen und auf minimale Groesse schrumpfen
-  5. optional mit xz packen, SHA256SUMS schreiben
+Steps:
+  1. Download the GSI and the Home Assistant app (build/sources.json, SHA-256 verified)
+  2. Grow the ext4 image and resolve shared_blocks (otherwise it is not writable)
+  3. Modify it with debugfs:
+       - remove the apps listed in src/removed-apps.txt
+       - add the Home Assistant app as a system app (libraries extracted to lib/arm/)
+       - write the files from src/system-files.txt (mode, owner, SELinux label)
+       - apply src/system/bin/rw-system.sh.patch to /system/bin/rw-system.sh
+       - append src/product/build.prop.append to /system/product/etc/build.prop
+  4. Check the file system and shrink it to its minimum size
+  5. Optionally compress with xz, write SHA256SUMS
 
-Laeuft unter Linux (GitHub Actions: ubuntu-latest) und braucht e2fsprogs (debugfs,
-e2fsck, resize2fs), patch und xz. Kein root, keine Loop-Mounts.
+Runs on Linux (GitHub Actions: ubuntu-latest) and needs e2fsprogs (debugfs,
+e2fsck, resize2fs), patch and xz. No root, no loop mounts.
 
-Aufruf: build_image.py --version v7 [--out out] [--cache .cache] [--xz]
+Usage: build_image.py --version v8 [--out out] [--cache .cache] [--xz]
 """
 import argparse
 import gzip
@@ -34,7 +34,7 @@ import zipfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC = os.path.join(ROOT, "src")
 HA_DIR = "/system/app/HomeAssistant"
-HA_ABI = "armeabi-v7a"  # 32-bit-Userspace -> lib/arm/
+HA_ABI = "armeabi-v7a"  # 32-bit userspace -> lib/arm/
 GROW = 200 * 1024 * 1024
 
 
@@ -45,7 +45,7 @@ def log(msg):
 def run(cmd, ok=(0,), **kw):
     res = subprocess.run(cmd, **kw)
     if res.returncode not in ok:
-        sys.exit(f"Fehler: {' '.join(cmd)} -> Exit-Code {res.returncode}")
+        sys.exit(f"Error: {' '.join(cmd)} -> exit code {res.returncode}")
     return res
 
 
@@ -61,15 +61,15 @@ def fetch(entry, cache):
     os.makedirs(cache, exist_ok=True)
     dest = os.path.join(cache, entry["file"])
     if os.path.exists(dest) and sha256(dest) == entry["sha256"]:
-        log(f"aus dem Cache: {entry['file']}")
+        log(f"from cache: {entry['file']}")
         return dest
-    log(f"lade {entry['url']}")
+    log(f"downloading {entry['url']}")
     req = urllib.request.Request(entry["url"], headers={"User-Agent": "curl/8"})
     with urllib.request.urlopen(req) as r, open(dest + ".part", "wb") as f:
         shutil.copyfileobj(r, f, 1 << 20)
     got = sha256(dest + ".part")
     if got != entry["sha256"]:
-        sys.exit(f"Pruefsumme falsch fuer {entry['file']}: {got} statt {entry['sha256']}")
+        sys.exit(f"Checksum mismatch for {entry['file']}: {got} instead of {entry['sha256']}")
     os.replace(dest + ".part", dest)
     return dest
 
@@ -84,7 +84,7 @@ def exists(img, path):
 
 
 def tree(img, path):
-    """Eintraege unter path (rekursiv) als Liste (pfad, ist_ordner), Kinder vor Eltern."""
+    """Entries below path (recursive) as a list of (path, is_dir), children before parents."""
     out = []
     for line in debugfs_read(img, f"ls -p {path}").splitlines():
         parts = line.strip().split("/")
@@ -103,7 +103,7 @@ def tree(img, path):
 
 
 class Commands:
-    """Sammelt debugfs-Befehle und fuehrt sie in einem Lauf aus."""
+    """Collects debugfs commands and runs them in a single pass."""
 
     def __init__(self, work):
         self.work = work
@@ -146,7 +146,7 @@ class Commands:
         res = subprocess.run(["debugfs", "-w", "-f", script, img], capture_output=True, text=True)
         errors = [l for l in res.stderr.splitlines() if l.strip() and not l.startswith("debugfs ")]
         if res.returncode != 0 or errors:
-            sys.exit("debugfs meldete Fehler:\n" + "\n".join(errors))
+            sys.exit("debugfs reported errors:\n" + "\n".join(errors))
 
 
 def read_table(path):
@@ -170,11 +170,11 @@ def build(args):
     gsi = fetch(sources["gsi"], args.cache)
     apk = fetch(sources["homeassistant"], args.cache)
 
-    log("entpacke GSI")
+    log("unpacking GSI")
     with gzip.open(gsi, "rb") as src, open(img, "wb") as dst:
         shutil.copyfileobj(src, dst, 1 << 20)
 
-    log("vergroessere Image und loese shared_blocks auf")
+    log("growing image and resolving shared_blocks")
     with open(img, "r+b") as f:
         f.truncate(os.path.getsize(img) + GROW)
     run(["resize2fs", img], stdout=subprocess.DEVNULL)
@@ -182,17 +182,17 @@ def build(args):
 
     cmd = Commands(work)
 
-    log("Apps entfernen")
+    log("removing apps")
     with open(os.path.join(SRC, "removed-apps.txt")) as f:
         removed = [l.strip() for l in f if l.strip() and not l.startswith("#")]
     for app in removed:
         if not exists(img, app):
-            sys.exit(f"{app} gibt es im GSI nicht (removed-apps.txt pruefen)")
+            sys.exit(f"{app} does not exist in the GSI (check removed-apps.txt)")
         for path, is_dir in tree(img, app):
             cmd.lines.append(f"{'rmdir' if is_dir else 'rm'} {path}")
         cmd.lines.append(f"rmdir {app}")
 
-    log(f"Home Assistant {sources['homeassistant']['version']} als System-App")
+    log(f"Home Assistant {sources['homeassistant']['version']} as system app")
     cmd.mkdir(HA_DIR)
     cmd.write(apk, f"{HA_DIR}/HomeAssistant.apk")
     cmd.mkdir(f"{HA_DIR}/lib")
@@ -202,44 +202,44 @@ def build(args):
     with zipfile.ZipFile(apk) as z:
         libs = [n for n in z.namelist() if n.startswith(f"lib/{HA_ABI}/") and n.endswith(".so")]
         if not libs:
-            sys.exit(f"keine {HA_ABI}-Bibliotheken in der App gefunden")
+            sys.exit(f"no {HA_ABI} libraries found in the app")
         for member in sorted(libs):
             host = os.path.join(libdir, os.path.basename(member))
             with z.open(member) as s, open(host, "wb") as d:
                 shutil.copyfileobj(s, d)
             cmd.write(host, f"{HA_DIR}/lib/arm/{os.path.basename(member)}")
 
-    log("Dateien aus src/system-files.txt")
+    log("files from src/system-files.txt")
     for target, source, mode, uid, gid, selinux_type in read_table(os.path.join(SRC, "system-files.txt")):
         if target.endswith("/"):
             cmd.mkdir(target.rstrip("/"), mode, uid, gid, selinux_type)
         else:
             cmd.write(os.path.join(SRC, source), target, mode, uid, gid, selinux_type)
 
-    log("rw-system.sh patchen")
+    log("patching rw-system.sh")
     rw = os.path.join(work, "rw-system.sh")
     run(["debugfs", "-R", f"dump /system/bin/rw-system.sh {rw}", img], stderr=subprocess.DEVNULL)
     run(["patch", "--no-backup-if-mismatch", "-s", rw, os.path.join(SRC, "system", "bin", "rw-system.sh.patch")])
     cmd.replace(rw, "/system/bin/rw-system.sh", "0755", 0, 2000, "phhsu_exec")
 
-    log("build.prop ergaenzen")
+    log("extending build.prop")
     prop = os.path.join(work, "build.prop")
     run(["debugfs", "-R", f"dump /system/product/etc/build.prop {prop}", img], stderr=subprocess.DEVNULL)
     with open(os.path.join(SRC, "product", "build.prop.append")) as s, open(prop, "a") as d:
         d.write("\n" + s.read())
     cmd.replace(prop, "/system/product/etc/build.prop", "0644", 0, 0, "system_file")
 
-    log("debugfs ausfuehren")
+    log("running debugfs")
     cmd.run(img)
 
-    log("Dateisystem pruefen und verkleinern")
+    log("checking and shrinking the file system")
     run(["e2fsck", "-fy", img], ok=(0, 1), stdout=subprocess.DEVNULL)
     run(["resize2fs", "-M", img], stdout=subprocess.DEVNULL)
     run(["e2fsck", "-fn", img], stdout=subprocess.DEVNULL)
 
     files = [name]
     if args.xz:
-        log("packe mit xz")
+        log("compressing with xz")
         run(["xz", "-T0", "-6", "-k", "-f", img])
         files.append(name + ".xz")
 
@@ -247,15 +247,15 @@ def build(args):
         for n in files:
             f.write(f"{sha256(os.path.join(args.out, n))}  {n}\n")
     shutil.rmtree(work)
-    log(f"fertig: {img} ({os.path.getsize(img) // (1024 * 1024)} MB)")
+    log(f"done: {img} ({os.path.getsize(img) // (1024 * 1024)} MB)")
 
 
 def main():
-    p = argparse.ArgumentParser(description="Baut das F83W-System-Image")
-    p.add_argument("--version", required=True, help="Image-Version, z. B. v7")
+    p = argparse.ArgumentParser(description="Builds the F83W system image")
+    p.add_argument("--version", required=True, help="image version, e.g. v8")
     p.add_argument("--out", default=os.path.join(ROOT, "out"))
     p.add_argument("--cache", default=os.path.join(ROOT, ".cache"))
-    p.add_argument("--xz", action="store_true", help="zusaetzlich .img.xz erzeugen")
+    p.add_argument("--xz", action="store_true", help="also create .img.xz")
     build(p.parse_args())
 
 

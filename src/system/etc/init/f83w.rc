@@ -1,4 +1,4 @@
-# F83W Wand-Display
+# F83W wall panel
 service f83w_watchdog /system/bin/f83w-watchdog.sh
     class late_start
     user root
