@@ -1,0 +1,16 @@
+{
+  "image_name": "lineage-20-a64_bvS-f83w",
+  "gsi": {
+    "description": "LineageOS 20 (Android 13) GSI a64_bvS von AndyYan, Build 21.10.2025",
+    "url": "https://sourceforge.net/projects/andyyan-gsi/files/lineage-20-td/lineage-20.0-20251021-UNOFFICIAL-a64_bvS.img.gz/download",
+    "file": "lineage-20.0-20251021-UNOFFICIAL-a64_bvS.img.gz",
+    "sha256": "e47b7c3f310ebe778714a2576e458782dd75b0d1162595fcab0c853549287f88"
+  },
+  "homeassistant": {
+    "description": "Home Assistant Companion for Android, Variante minimal (ohne Google-Dienste)",
+    "version": "2026.8.4",
+    "url": "https://github.com/home-assistant/android/releases/download/2026.8.4/app-minimal-release.apk",
+    "file": "homeassistant-minimal-2026.8.4.apk",
+    "sha256": "8f58a7df71c61447d3370f5d5956a66e3523625dc4b51c8434bd166d3e731bea"
+  }
+}
