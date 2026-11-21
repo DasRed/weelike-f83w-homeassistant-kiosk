@@ -1,0 +1,102 @@
+name: Image bauen
+
+# Baut das System-Image aus dem Original-GSI und src/ (tools/build_image.py).
+#  - Pull Request: bauen und als Artefakt (3 Tage) ablegen
+#  - Tag v* pushen: bauen und als GitHub-Release veroeffentlichen (das laedt flash.sh)
+#  - manuell: bauen, wahlweise als Release veroeffentlichen
+
+on:
+  pull_request:
+    paths:
+      - src/**
+      - build/**
+      - tools/build_image.py
+      - .github/workflows/build-image.yml
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Image-Version und Release-Tag, z. B. v8
+        required: true
+      release:
+        description: Als GitHub-Release veroeffentlichen
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version bestimmen
+        id: v
+        env:
+          EVENT: ${{ github.event_name }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_RELEASE: ${{ inputs.release }}
+          PR: ${{ github.event.number }}
+        run: |
+          case "$EVENT" in
+            push)              version="$GITHUB_REF_NAME"; release=true ;;
+            workflow_dispatch) version="$INPUT_VERSION";   release="$INPUT_RELEASE" ;;
+            *)                 version="pr$PR";            release=false ;;
+          esac
+          [[ "$version" =~ ^(v[0-9]+|pr[0-9]+)$ ]] || { echo "Ungueltige Version: $version"; exit 1; }
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+
+      - name: Werkzeuge installieren
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq e2fsprogs patch xz-utils
+
+      - name: Quellen aus dem Cache
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: sources-${{ hashFiles('build/sources.json') }}
+
+      - name: Image bauen
+        run: python3 tools/build_image.py --version "${{ steps.v.outputs.version }}" --out out --xz
+
+      - name: Ergebnis
+        run: |
+          ls -l out
+          cat out/SHA256SUMS
+          rm out/*.img
+
+      - name: Als Artefakt ablegen
+        if: steps.v.outputs.release != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-${{ steps.v.outputs.version }}
+          path: out/
+          retention-days: 3
+          compression-level: 0
+
+      - name: Als Release veroeffentlichen
+        if: steps.v.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.v.outputs.version }}
+        run: |
+          gsi=$(jq -r .gsi.file build/sources.json)
+          ha=$(jq -r .homeassistant.version build/sources.json)
+          {
+            echo "System-Image $VERSION fuer das Weelikeit F83W, gebaut aus Commit $GITHUB_SHA."
+            echo
+            echo "- Basis: \`$gsi\` (AndyYan)"
+            echo "- Home Assistant Companion (minimal) $ha"
+            echo
+            echo "Flashen mit \`./flash.sh\` – das Skript laedt dieses Release selbst."
+            echo
+            echo '```'
+            cat out/SHA256SUMS
+            echo '```'
+          } > notes.md
+          gh release create "$VERSION" out/* --target "$GITHUB_SHA" --title "Image $VERSION" --notes-file notes.md

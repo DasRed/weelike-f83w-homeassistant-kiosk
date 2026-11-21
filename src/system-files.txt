@@ -1,0 +1,15 @@
+# Dateien und Ordner, die build_image.py ins System-Image schreibt.
+#
+# Ziel im Image                  Quelle (relativ zu src/)          Modus  UID  GID   SELinux-Typ
+# Ordner enden auf "/" und haben keine Quelle ("-").
+#
+# phhsu_exec: Skripte, die im permissiven Kontext phhsu_daemon laufen (wie rw-system.sh)
+# vendor_configs_file: wird per Bind-Mount ueber /vendor/etc/gsensor.cfg gelegt
+
+/system/bin/f83w-boot.sh         system/bin/f83w-boot.sh           0755   0    2000  phhsu_exec
+/system/bin/f83w-watchdog.sh     system/bin/f83w-watchdog.sh       0755   0    2000  phhsu_exec
+/system/etc/init/f83w.rc         system/etc/init/f83w.rc           0644   0    0     system_file
+/system/etc/sysconfig/f83w.xml   system/etc/sysconfig/f83w.xml     0644   0    0     system_file
+/system/etc/f83w/                -                                 0755   0    0     system_file
+/system/etc/f83w/gsensor.cfg     system/etc/f83w/gsensor.cfg       0644   0    0     vendor_configs_file
+/system/etc/hide-vendor-app/     -                                 0755   0    0     system_file

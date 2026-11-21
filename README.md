@@ -27,16 +27,17 @@ cd weelike-f83w-homeassistant-kiosk
 ./flash.sh
 ```
 
-Das System-Image liegt als geteiltes Zip-Archiv in `images/`
-(`lineage-20-a64_bvS-f83w-v7.img.zip` + `.z01` … `.z08`, je unter 100 MB, zusammen ~800 MB).
-`flash.sh` setzt es beim ersten Start mit `tools/extract_split_zip.py` zum 1,6 GB großen
-Image zusammen und prüft die Prüfsumme (`images/SHA256SUMS`). Fehlen Teile – etwa bei
-einem Download ohne `git clone` –, lädt das Skript sie aus dem Repository nach.
+Das System-Image liegt nicht im Repository. GitHub Actions baut es aus dem Original-GSI
+und `src/` und legt es als [Release](https://github.com/DasRed/weelike-f83w-homeassistant-kiosk/releases)
+ab (`lineage-20-a64_bvS-f83w-<version>.img.xz`, ca. 650 MB, entpackt 1,6 GB). `flash.sh`
+lädt beim ersten Start die eingestellte Version (`IMAGE_VERSION`, aktuell `v8`), prüft die
+Prüfsummen und entpackt sie nach `images/`. Eine andere Version:
+`F83W_IMAGE_VERSION=v9 ./flash.sh`.
 
 ## Voraussetzungen
 
 - Mac (Apple Silicon oder Intel) mit `python3` (Xcode Command Line Tools) – fehlende Werkzeuge installiert das Skript
-  selbst über Homebrew (`android-platform-tools`). Nur falls `fastboot` den
+  selbst über Homebrew (`android-platform-tools`, `xz`). Nur falls `fastboot` den
   Allwinner-Bootloader nicht erkennt, kommen zusätzlich `libusb` und Python/`pyusb`
   für den Notfallweg dazu.
 - **USB-Datenkabel** (reine Ladekabel – z. B. das Apple-Netzteilkabel – reichen nicht)
@@ -108,10 +109,13 @@ template:
 
 ```
 flash.sh                      Hauptskript
-images/                       System-Image als geteiltes Zip, leeres vbmeta, SHA256SUMS
+images/                       leeres vbmeta, SHA256SUMS (System-Image wird hierher geladen)
 tools/fastboot_usb.py         Fastboot über libusb (für den Allwinner-Bootloader am Mac)
-tools/extract_split_zip.py    entpackt das geteilte Image-Zip (nur Python-Standardbibliothek)
+tools/build_image.py          baut das System-Image (läuft in GitHub Actions)
+build/sources.json            Original-GSI und Home-Assistant-App mit Version und SHA-256
+.github/workflows/            Workflow „Image bauen“
 src/                          alle Änderungen gegenüber dem Original-GSI
+  system-files.txt              Zielpfad, Modus, Besitzer und SELinux-Label je Datei
   system/bin/f83w-boot.sh       Standardeinstellungen, Rechte, Startbildschirm
   system/bin/f83w-watchdog.sh   Wächter
   system/bin/rw-system.sh.patch Bind-Mounts (Hersteller-Apps, Lagesensor) + Navigationsleiste
@@ -123,8 +127,29 @@ src/                          alle Änderungen gegenüber dem Original-GSI
 ```
 
 Zusätzlich im Image: Home-Assistant-App unter `/system/app/HomeAssistant`
-(mit entpackten `armeabi-v7a`-Bibliotheken), leerer Ordner `/system/etc/hide-vendor-app`,
-ext4-Deduplizierung (`shared_blocks`) entfernt.
+(mit entpackten `armeabi-v7a`-Bibliotheken), ext4-Deduplizierung (`shared_blocks`) entfernt.
+
+## Image bauen
+
+`tools/build_image.py` erzeugt das Image ohne root und ohne Loop-Mounts: GSI und App laden
+(Prüfsummen aus `build/sources.json`), ext4 vergrößern und `shared_blocks` auflösen, mit
+`debugfs` Apps entfernen, Dateien samt SELinux-Labels schreiben, `rw-system.sh` patchen,
+`build.prop` ergänzen, zum Schluss prüfen und verkleinern. Braucht Linux mit `e2fsprogs`,
+`patch` und `xz`:
+
+```bash
+python3 tools/build_image.py --version v9 --xz   # Ergebnis in out/
+```
+
+Der Workflow **Image bauen** läuft automatisch:
+
+- **Pull Request**, der `src/`, `build/` oder das Build-Skript ändert: baut das Image und
+  legt es 3 Tage als Artefakt ab
+- **Tag `v*` pushen** (z. B. `git tag v9 && git push origin v9`): baut das Image und
+  veröffentlicht es als Release; danach `IMAGE_VERSION` in `flash.sh` hochsetzen
+- **manuell** (Actions → Image bauen → Run workflow): mit oder ohne Release
+
+Neue Home-Assistant-Version: `version`, `url` und `sha256` in `build/sources.json` anpassen.
 
 ## Credits
 
