@@ -15,6 +15,10 @@ schlanken Wanddisplay für Home Assistant um:
 
 Getestet mit Werksfirmware `weelikeit_F83W_V01_20240111` (Vendor-Build `20231212`).
 
+Die Geschichte dahinter – Bootloader-Unlock, Bootschleife, Lagesensor, Kiosk – steht im
+Artikel [How I Turned Four Cheap Android Tablets into Rock-Solid Home Assistant Wall Panels](https://medium.com/@marco.starker/how-i-turned-four-cheap-android-tablets-into-rock-solid-home-assistant-wall-panels-6e24d7c8c7ba)
+auf Medium (Englisch).
+
 ## Download
 
 ```bash
