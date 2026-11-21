@@ -15,11 +15,12 @@ set -u
 
 cd "$(dirname "$0")" || exit 1
 ROOT=$(pwd)
-IMAGE_VERSION="v7"
-IMAGE="images/lineage-20-a64_bvS-f83w-$IMAGE_VERSION.img"
-IMAGE_ZIP="$IMAGE.zip"            # geteiltes Zip: .zip + .z01 ... .z08 (je < 100 MB fuer GitHub)
-IMAGE_ZIP_PARTS=8
-REPO_RAW="https://github.com/DasRed/weelike-f83w-homeassistant-kiosk/raw/main"
+# Das System-Image baut GitHub Actions (tools/build_image.py) und legt es als Release ab.
+IMAGE_VERSION="${F83W_IMAGE_VERSION:-v8}"
+IMAGE_NAME="lineage-20-a64_bvS-f83w-$IMAGE_VERSION.img"
+IMAGE="images/$IMAGE_NAME"
+IMAGE_SUMS="images/SHA256SUMS-$IMAGE_VERSION"
+RELEASE_URL="https://github.com/DasRed/weelike-f83w-homeassistant-kiosk/releases/download/$IMAGE_VERSION"
 VBMETA="images/vbmeta_disabled.img"
 PKG="io.homeassistant.companion.android.minimal"
 HA_DB="/data/data/$PKG/databases/HomeAssistantDB"
@@ -77,7 +78,7 @@ ha_ssid_set()    { [ "$(hadb "select count(*) from servers where internal_ssids 
 prerequisites() {
   step "1/7  Voraussetzungen auf dem Mac"
   [ "$(uname -s)" = "Darwin" ] || fail "Dieses Skript ist fuer macOS gedacht."
-  command -v python3 >/dev/null 2>&1 && python3 -c 'import zlib' >/dev/null 2>&1 \
+  command -v python3 >/dev/null 2>&1 \
     || fail "python3 fehlt. Bitte 'xcode-select --install' ausfuehren und das Skript neu starten."
 
   if ! command -v brew >/dev/null 2>&1; then
@@ -97,26 +98,41 @@ prerequisites() {
   fi
   ok "adb/fastboot: $(adb version | head -1)"
 
-  [ -f "$VBMETA" ] || fail "images/vbmeta_disabled.img fehlt."
-  if [ ! -f "$IMAGE" ]; then
-    local i part missing=""
-    for i in $(seq 1 "$IMAGE_ZIP_PARTS"); do part=$(printf "%s.z%02d" "$IMAGE" "$i"); [ -f "$part" ] || missing="$missing $part"; done
-    [ -f "$IMAGE_ZIP" ] || missing="$missing $IMAGE_ZIP"
-    if [ -n "$missing" ]; then
-      info "Image-Teile fehlen – lade sie aus dem Repository (ca. 800 MB) ..."
-      for part in $missing; do
-        info "  $(basename "$part")"
-        curl -fL --progress-bar -o "$part.part" "$REPO_RAW/$part" && mv "$part.part" "$part" \
-          || fail "Download fehlgeschlagen: $REPO_RAW/$part"
-      done
-    fi
-    info "Setze das System-Image aus den Zip-Teilen zusammen ..."
-    python3 tools/extract_split_zip.py "$IMAGE_ZIP" images >/dev/null || fail "Entpacken fehlgeschlagen."
+  if ! command -v xz >/dev/null 2>&1; then
+    info "Installiere xz (zum Entpacken des System-Images)"
+    brew install xz || fail "brew install xz fehlgeschlagen."
   fi
-  info "Pruefe Pruefsummen der Images (dauert einen Moment) ..."
-  (cd images && grep -E "  (lineage-20-a64_bvS-f83w-$IMAGE_VERSION.img|vbmeta_disabled.img)$" SHA256SUMS | shasum -a 256 -c - >/dev/null 2>&1) \
-    || fail "Pruefsumme stimmt nicht – Image beschaedigt? Datei in images/ loeschen und Skript neu starten."
-  ok "Images vollstaendig"
+
+  [ -f "$VBMETA" ] || fail "images/vbmeta_disabled.img fehlt."
+  (cd images && grep -E "  vbmeta_disabled.img$" SHA256SUMS | shasum -a 256 -c - >/dev/null 2>&1) \
+    || fail "Pruefsumme von images/vbmeta_disabled.img stimmt nicht."
+  fetch_image
+  ok "Images vollstaendig ($IMAGE_VERSION)"
+}
+
+# System-Image aus dem GitHub-Release laden, pruefen und entpacken
+image_ok() { (cd images && grep -E "  $IMAGE_NAME$" "$(basename "$IMAGE_SUMS")" | shasum -a 256 -c - >/dev/null 2>&1); }
+fetch_image() {
+  if [ ! -f "$IMAGE_SUMS" ]; then
+    curl -fsSL -o "$IMAGE_SUMS.part" "$RELEASE_URL/SHA256SUMS" && mv "$IMAGE_SUMS.part" "$IMAGE_SUMS" \
+      || fail "Release $IMAGE_VERSION nicht gefunden: $RELEASE_URL"
+  fi
+  if [ -f "$IMAGE" ]; then
+    info "Pruefe vorhandenes System-Image (dauert einen Moment) ..."
+    image_ok && return 0
+    warn "Vorhandenes System-Image passt nicht zu $IMAGE_VERSION – lade es neu."
+    rm -f "$IMAGE"
+  fi
+  if [ ! -f "$IMAGE.xz" ] || ! (cd images && grep -E "  $IMAGE_NAME.xz$" "$(basename "$IMAGE_SUMS")" | shasum -a 256 -c - >/dev/null 2>&1); then
+    info "Lade System-Image $IMAGE_VERSION aus dem GitHub-Release (ca. 650 MB) ..."
+    curl -fL --progress-bar -C - -o "$IMAGE.xz.part" "$RELEASE_URL/$IMAGE_NAME.xz" && mv "$IMAGE.xz.part" "$IMAGE.xz" \
+      || fail "Download fehlgeschlagen: $RELEASE_URL/$IMAGE_NAME.xz (erneuter Start setzt den Download fort)"
+    (cd images && grep -E "  $IMAGE_NAME.xz$" "$(basename "$IMAGE_SUMS")" | shasum -a 256 -c - >/dev/null 2>&1) \
+      || { rm -f "$IMAGE.xz"; fail "Pruefsumme des Downloads stimmt nicht – bitte Skript neu starten."; }
+  fi
+  info "Entpacke System-Image ..."
+  xz -dkf "$IMAGE.xz" || fail "Entpacken fehlgeschlagen."
+  image_ok || fail "Pruefsumme des entpackten Images stimmt nicht – Dateien in images/ loeschen und Skript neu starten."
 }
 
 # ----------------------------------------------------------------------------- 2. Tablet verbinden

@@ -1,4 +1,8 @@
 .venv/
+.cache/
+out/
 logs/
 images/lineage-*.img
+images/lineage-*.img.xz
 images/*.part
+images/SHA256SUMS-*
