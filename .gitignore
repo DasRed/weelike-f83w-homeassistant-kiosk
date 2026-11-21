@@ -6,3 +6,4 @@ images/lineage-*.img
 images/lineage-*.img.xz
 images/*.part
 images/SHA256SUMS-*
+__pycache__/
