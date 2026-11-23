@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Requirements, download and the seven steps of flash.sh – from factory state to signing in to Home Assistant.
+description: Flash a Weelikeit F83W with flash.sh. Requirements, download and the seven steps from factory state to signing in to Home Assistant on the wall display.
 order: 10
 slug: installation
 section: Getting started

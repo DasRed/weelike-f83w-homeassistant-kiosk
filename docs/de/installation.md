@@ -1,6 +1,6 @@
 ---
 title: Installation
-description: Voraussetzungen, Download und die sieben Schritte von flash.sh – vom Werkszustand bis zur Anmeldung in Home Assistant.
+description: Weelikeit F83W mit flash.sh flashen, mit Voraussetzungen, Download und den sieben Schritten vom Werkszustand bis zur Anmeldung in Home Assistant am Wanddisplay.
 order: 10
 slug: installation
 section: Einstieg

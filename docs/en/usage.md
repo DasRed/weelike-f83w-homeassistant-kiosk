@@ -1,6 +1,6 @@
 ---
 title: Usage
-description: Control the F83W from Home Assistant – brightness as a command and as a slider, sensors, Android settings and logs.
+description: Control the F83W wall display from Home Assistant, with brightness as a command and as a slider, more commands, Android settings and logs from the tablet.
 order: 30
 slug: usage
 section: Details

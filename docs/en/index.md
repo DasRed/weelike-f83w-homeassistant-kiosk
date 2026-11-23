@@ -1,6 +1,6 @@
 ---
 title: Overview
-description: Flash kit that turns a Weelikeit F83W into a lean wall display with LineageOS 20 and a built-in Home Assistant app.
+description: Flash kit that turns a Weelikeit F83W into a lean Home Assistant wall display with LineageOS 20 and a built-in Home Assistant app. Features and compatibility.
 order: 0
 section: Getting started
 ---

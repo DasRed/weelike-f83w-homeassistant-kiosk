@@ -1,6 +1,6 @@
 ---
 title: Verwendung
-description: Das F83W aus Home Assistant steuern – Helligkeit per Befehl und als Regler, Sensoren, Android-Einstellungen und Logs.
+description: Das F83W-Wanddisplay aus Home Assistant steuern, mit Helligkeit per Befehl und als Regler, weiteren Befehlen, Android-Einstellungen und Logs vom Tablet.
 order: 30
 slug: verwendung
 section: Details
